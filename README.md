@@ -1,5 +1,10 @@
 # Slack Message Deleter
-Remove slack messages automatically from s chosen channel.
+Remove slack messages automatically from a channel through the Slack API.
+
+## Who should use this?
+If you using the free plan and running into the message limit.
+
+Or if you are just as lazy as i am, and just want to cleanup some channels without getting RSI.
 
 ## How to use
 
