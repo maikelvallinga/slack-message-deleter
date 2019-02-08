@@ -1,7 +1,7 @@
 """This module will contain all needed slack-deleter-message settings."""
 
 # Slack Legacy token, create here: https://api.slack.com/custom-integrations/legacy-tokens
-TOKEN = ''
+LEGACY_TOKEN = ''
 
 # The channel ID or Name
 CHANNEL = ''
