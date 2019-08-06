@@ -2,8 +2,8 @@
 
 import requests
 import json
-import time
 import logging
+import time
 
 from local_settings import LEGACY_TOKEN, CHANNEL, MESSAGE_DELETE_COUNT
 
@@ -73,18 +73,28 @@ class SlackAPI:
         return messages
 
     def delete_channel_messages(self, messages):
-        logger.info('Starting deletion of {messages} messages'.format(messages=len(messages)))
+        logger.info('Starting deletion of {messages} messages in channel {channel}'.format(messages=len(messages),
+                                                                                           channel=self.CHANNEL))
         for message in messages:
             try:
-                ts = message.get('ts')
-                url = self.get_delete_api_url(ts)
+                url = self.get_delete_api_url(message)
                 requests.get(url)
-                logger.info('Deleted: {ts}'.format(ts=ts))
-                time.sleep(0.2)
+                logger.info('Deleted: {message}'.format(message=message))
             except Exception as error:
                 logger.error('Got an error: {error}'.format(error=error))
-        logger.info('Finished!')
 
+    def set_channel_to_delete(self):
+        """Ask the user which channel to use for deleting messages."""
+        while not self.CHANNEL:
+            channel = get_input('\nEnter Channel Name or ID: ') if not CHANNEL else CHANNEL
+
+            try:
+                fetched_channel = self.CHANNELS_BY_NAME.get(channel)
+                fetched_channel = fetched_channel if fetched_channel else self.CHANNELS_BY_ID.get(channel)
+                self.CHANNEL = fetched_channel.get('id')
+                self.IS_PRIVATE_CHANNEL = fetched_channel.get('is_private')
+            except AttributeError:
+                logger.error('Invalid channel entered!')
 
 if __name__ == "__main__":
     legacy_token = get_input('Enter slack token: ') if not LEGACY_TOKEN else LEGACY_TOKEN
@@ -97,36 +107,28 @@ if __name__ == "__main__":
             id=slack_api.CHANNELS_BY_NAME[channel_name].get("id"),
             is_private=slack_api.CHANNELS_BY_NAME[channel_name].get("is_private")))
 
-    while not slack_api.CHANNEL:
-        channel = get_input('\nEnter Channel Name or ID: ') if not CHANNEL else CHANNEL
-
-        try:
-            slack_api.CHANNEL = slack_api.CHANNELS_BY_NAME.get(channel).get('id')
-            slack_api.IS_PRIVATE_CHANNEL = slack_api.CHANNELS_BY_NAME.get(channel).get('is_private')
-
-        except AttributeError:
-            pass
-
-        try:
-            if not slack_api.CHANNEL:
-                slack_api.CHANNEL = slack_api.CHANNELS_BY_ID.get(channel).get('id')
-                slack_api.IS_PRIVATE_CHANNEL = slack_api.CHANNELS_BY_ID.get(channel).get('is_private')
-        except AttributeError:
-            pass
-
-        if not slack_api.CHANNEL:
-            logger.error('Invalid channel entered!')
+    slack_api.set_channel_to_delete()
 
     # Get the number of messages
     while True:
-        slack_api.MESSAGE_COUNT = get_input('How many messages to delete? {count}: '.format(count=MESSAGE_DELETE_COUNT))
+        delete_count = get_input('How many messages to delete? {count}: '.format(count=MESSAGE_DELETE_COUNT))
         try:
-            slack_api.MESSAGE_COUNT = int(slack_api.MESSAGE_COUNT) if slack_api.MESSAGE_COUNT else MESSAGE_DELETE_COUNT
+            delete_count = int(delete_count) if delete_count else MESSAGE_DELETE_COUNT
             break
         except ValueError:
             logger.error('Invalid Value\n')
             continue
 
-    slack_messages = slack_api.get_channel_messages()
-    logger.info('Found: {count} messages...'.format(count=len(slack_messages)))
-    slack_api.delete_channel_messages(slack_messages)
+    messages_to_delete = [message.get('ts') for message in slack_api.get_channel_messages()[:delete_count]]
+
+    logger.info('Found: {count} messages...'.format(count=len(messages_to_delete)))
+    while messages_to_delete:
+        slack_api.delete_channel_messages(messages_to_delete)
+        messages_in_channel = [message.get('ts') for message in slack_api.get_channel_messages()]
+        logger.info('Ensure that all messages are deleted.')
+        messages_to_delete = list(set(messages_to_delete) & set(messages_in_channel))
+        if messages_to_delete:
+            logger.info('Cooling down api, since {count} messages still there!'.format(count=len(messages_to_delete)))
+            time.sleep(5)
+    logger.info('Finished deleting messages')
+
